@@ -587,16 +587,16 @@
         }
 
         function updateUsersTable(users) {
-            elements.usersTableBody.innerHTML = '';
-            Object.entries(users).forEach(([uid, user]) => {
-                const row = document.createElement('tr');
-                row.setAttribute('data-user-id', uid);
-                row.innerHTML = `
+    elements.usersTableBody.innerHTML = '';
+    Object.entries(users).forEach(([uid, user]) => {
+        const row = document.createElement('tr');
+        row.setAttribute('data-user-id', uid);
+        row.innerHTML = `
             <td>${user.email}</td>
             <td>${user.name}</td>
-            <td>${user.disabled ?
-                        '<span style="color: red">Disabled</span>' :
-                        '<span style="color: orange">Offline</span>'}</td>
+            <td>${user.disabled ? 
+                '<span style="color: red">Disabled</span>' : 
+                '<span style="color: orange">Offline</span>'}</td>
             <td>${formatLastActive(user.lastActive)}</td>
             <td class="user-actions">
                 <button class="action-button edit-button" onclick="editUser('${uid}')">
@@ -611,9 +611,9 @@
                 </button>
             </td>
         `;
-                elements.usersTableBody.appendChild(row);
-            });
-        }
+        elements.usersTableBody.appendChild(row);
+    });
+}
 
 
         const row = document.createElement('tr');
