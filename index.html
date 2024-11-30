@@ -544,27 +544,40 @@
 
         // Load Dashboard Data
         async function loadDashboard() {
-            showLoading();
-            try {
-                // Load users and update stats
-                const usersRef = database.ref('users');
-                usersRef.on('value', (snapshot) => {
-                    const users = snapshot.val() || {};
-                    updateUserStats(users);
-                    updateUsersTable(users);
-                });
+    showLoading();
+    try {
+        // Load users and update stats
+        const usersRef = database.ref('users');
+        const statusRef = database.ref('status');
 
-                // Listen for online status changes
-                const statusRef = database.ref('status');
-                statusRef.on('value', (snapshot) => {
-                    updateOnlineStatus(snapshot.val() || {});
-                });
-            } catch (error) {
-                alert('Error loading dashboard: ' + error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
+        // Use once() first to get initial data quickly
+        const initialUsers = await usersRef.once('value');
+        updateUserStats(initialUsers.val() || {});
+        updateUsersTable(initialUsers.val() || {});
+
+        // Then set up real-time listeners
+        usersRef.on('value', (snapshot) => {
+            const users = snapshot.val() || {};
+            updateUserStats(users);
+            updateUsersTable(users);
+        }, (error) => {
+            console.error('Error loading users:', error);
+            alert('Error loading users data. Please refresh the page.');
+        });
+
+        statusRef.on('value', (snapshot) => {
+            updateOnlineStatus(snapshot.val() || {});
+        }, (error) => {
+            console.error('Error loading status:', error);
+        });
+
+    } catch (error) {
+        console.error('Dashboard loading error:', error);
+        alert('Error loading dashboard. Please try again.');
+    } finally {
+        showLoading(false);
+    }
+}
 
         // Function to update online status indicators
         function updateOnlineStatus(statuses) {
@@ -617,30 +630,7 @@
 
 
         const row = document.createElement('tr');
-        row.setAttribute('data-user-id', uid); // Add this line
-        row.innerHTML = `
-            <td>${user.email}</td>
-            <td>${user.name}</td>
-            <td>${user.disabled ?
-                '<span style="color: red">Disabled</span>' :
-                '<span style="color: orange">Offline</span>'}</td>
-            <td>${formatLastActive(user.lastActive)}</td>
-            <td class="user-actions">
-                <button class="action-button edit-button" onclick="editUser('${uid}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="action-button ${user.disabled ? 'edit-button' : 'disable-button'}" 
-                        onclick="toggleUserStatus('${uid}', ${!user.disabled})">
-                    <i class="fas fa-${user.disabled ? 'unlock' : 'ban'}"></i>
-                </button>
-                <button class="action-button delete-button" onclick="deleteUser('${uid}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        elements.usersTableBody.appendChild(row);
-
-
+    
 
         // Update User Statistics
         function updateUserStats(users) {
@@ -661,37 +651,64 @@
 
         // Update Users Table
         function updateUsersTable(users) {
-            elements.usersTableBody.innerHTML = '';
-            Object.entries(users).forEach(([uid, user]) => {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${user.email}</td>
-                    <td>${user.name}</td>
-                    <td>${user.disabled ? '<span style="color: red">Disabled</span>' : '<span style="color: green">Active</span>'}</td>
-                    <td>${formatLastActive(user.lastActive)}</td>
-                    <td class="user-actions">
-                        <button class="action-button edit-button" onclick="editUser('${uid}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="action-button ${user.disabled ? 'edit-button' : 'disable-button'}" 
-                                onclick="toggleUserStatus('${uid}', ${!user.disabled})">
-                            <i class="fas fa-${user.disabled ? 'unlock' : 'ban'}"></i>
-                        </button>
-                        <button class="action-button delete-button" onclick="deleteUser('${uid}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </td>
-                `;
-                elements.usersTableBody.appendChild(row);
-            });
-        }
+    if (!elements.usersTableBody) {
+        console.error('Users table body element not found');
+        return;
+    }
+
+    elements.usersTableBody.innerHTML = '';
+    
+    if (!users) {
+        console.warn('No users data provided');
+        return;
+    }
+
+    Object.entries(users).forEach(([uid, user]) => {
+        if (!user) return; // Skip if user data is invalid
+
+        const row = document.createElement('tr');
+        row.setAttribute('data-user-id', uid);
+        
+        // Sanitize user data to prevent XSS
+        const sanitizedEmail = user.email ? user.email.replace(/[<>]/g, '') : 'No email';
+        const sanitizedName = user.name ? user.name.replace(/[<>]/g, '') : 'No name';
+        
+        row.innerHTML = `
+            <td>${sanitizedEmail}</td>
+            <td>${sanitizedName}</td>
+            <td>${user.disabled ? 
+                '<span style="color: red">Disabled</span>' : 
+                '<span style="color: orange">Offline</span>'}</td>
+            <td>${formatLastActive(user.lastActive)}</td>
+            <td class="user-actions">
+                <button class="action-button edit-button" onclick="editUser('${uid}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="action-button ${user.disabled ? 'edit-button' : 'disable-button'}" 
+                        onclick="toggleUserStatus('${uid}', ${!user.disabled})">
+                    <i class="fas fa-${user.disabled ? 'unlock' : 'ban'}"></i>
+                </button>
+                <button class="action-button delete-button" onclick="deleteUser('${uid}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+        elements.usersTableBody.appendChild(row);
+    });
+}
 
         // Format Last Active Time
         function formatLastActive(timestamp) {
-            if (!timestamp) return 'Never';
-            const date = new Date(timestamp);
-            return date.toLocaleString();
-        }
+    if (!timestamp) return 'Never';
+    try {
+        const date = new Date(timestamp);
+        if (isNaN(date.getTime())) return 'Invalid date';
+        return date.toLocaleString();
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Error';
+    }
+}
 
         // Add New User
         elements.addUserButton.addEventListener('click', () => {
