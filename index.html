@@ -355,11 +355,11 @@
             </div>
             <div class="input-group">
                 <label for="adminEmail">Admin Email</label>
-                <input type="email" id="adminEmail" placeholder="Enter admin email">
+                <input type="email" id="adminEmail" autocomplete="email" placeholder="Enter admin email">
             </div>
             <div class="input-group">
                 <label for="adminPassword">Password</label>
-                <input type="password" id="adminPassword" placeholder="Enter password">
+                <input type="password" id="adminPassword" autocomplete="current-password" placeholder="Enter password">
             </div>
             <button id="loginButton" class="login-button">Login</button>
         </div>
@@ -520,22 +520,27 @@
             try {
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
 
-                // Check if this is the main admin
-                const isMainAdmin = await validateMainAdmin(userCredential.user.uid);
-                if (!isMainAdmin) {
+                // Check admin status
+                const adminRef = database.ref(`admins/${userCredential.user.uid}`);
+                const snapshot = await adminRef.once('value');
+
+                if (!snapshot.exists() || !snapshot.val().isMainAdmin) {
+                    await auth.signOut();
+                    alert('Access denied. Only administrators can access this panel.');
                     showLoading(false);
                     return;
                 }
 
                 currentUser = userCredential.user;
+                adminRole = snapshot.val().role;
                 showScreen('dashboardScreen');
                 loadDashboard();
             } catch (error) {
+                console.error('Login error:', error);
                 alert(error.message);
-            } finally {
                 showLoading(false);
             }
-        }); 
+        });
 
         // Load Dashboard Data
         async function loadDashboard() {
@@ -561,36 +566,63 @@
             }
         }
 
-// Function to update online status indicators
-function updateOnlineStatus(statuses) {
-    const rows = elements.usersTableBody.getElementsByTagName('tr');
-    for (const row of rows) {
-        const userId = row.getAttribute('data-user-id');
-        const statusCell = row.cells[2]; // The status column
-        if (userId && statusCell) {
-            const isOnline = statuses[userId]?.state === 'online';
-            const currentStatus = statusCell.querySelector('span').textContent;
-            const isDisabled = currentStatus === 'Disabled';
+        // Function to update online status indicators
+        function updateOnlineStatus(statuses) {
+            const rows = elements.usersTableBody.getElementsByTagName('tr');
+            for (const row of rows) {
+                const userId = row.getAttribute('data-user-id');
+                const statusCell = row.cells[2]; // The status column
+                if (userId && statusCell) {
+                    const isOnline = statuses[userId]?.state === 'online';
+                    const currentStatus = statusCell.querySelector('span').textContent;
+                    const isDisabled = currentStatus === 'Disabled';
 
-            if (!isDisabled) {
-                statusCell.innerHTML = isOnline ? 
-                    '<span style="color: green">Online</span>' : 
-                    '<span style="color: orange">Offline</span>';
+                    if (!isDisabled) {
+                        statusCell.innerHTML = isOnline ?
+                            '<span style="color: green">Online</span>' :
+                            '<span style="color: orange">Offline</span>';
+                    }
+                }
             }
         }
-    }
-}
 
-function updateUsersTable(users) {
-    elements.usersTableBody.innerHTML = '';
-    Object.entries(users).forEach(([uid, user]) => {
+        function updateUsersTable(users) {
+            elements.usersTableBody.innerHTML = '';
+            Object.entries(users).forEach(([uid, user]) => {
+                const row = document.createElement('tr');
+                row.setAttribute('data-user-id', uid);
+                row.innerHTML = `
+            <td>${user.email}</td>
+            <td>${user.name}</td>
+            <td>${user.disabled ?
+                        '<span style="color: red">Disabled</span>' :
+                        '<span style="color: orange">Offline</span>'}</td>
+            <td>${formatLastActive(user.lastActive)}</td>
+            <td class="user-actions">
+                <button class="action-button edit-button" onclick="editUser('${uid}')">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="action-button ${user.disabled ? 'edit-button' : 'disable-button'}" 
+                        onclick="toggleUserStatus('${uid}', ${!user.disabled})">
+                    <i class="fas fa-${user.disabled ? 'unlock' : 'ban'}"></i>
+                </button>
+                <button class="action-button delete-button" onclick="deleteUser('${uid}')">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </td>
+        `;
+                elements.usersTableBody.appendChild(row);
+            });
+        }
+
+
         const row = document.createElement('tr');
         row.setAttribute('data-user-id', uid); // Add this line
         row.innerHTML = `
             <td>${user.email}</td>
             <td>${user.name}</td>
-            <td>${user.disabled ? 
-                '<span style="color: red">Disabled</span>' : 
+            <td>${user.disabled ?
+                '<span style="color: red">Disabled</span>' :
                 '<span style="color: orange">Offline</span>'}</td>
             <td>${formatLastActive(user.lastActive)}</td>
             <td class="user-actions">
@@ -607,8 +639,8 @@ function updateUsersTable(users) {
             </td>
         `;
         elements.usersTableBody.appendChild(row);
-    });
-}
+
+
 
         // Update User Statistics
         function updateUserStats(users) {
