@@ -18,7 +18,8 @@
         }
 
         body {
-            background: #f5f5f5;
+            font-family: 'Arial', sans-serif;
+            background: #f0f0f0;
             min-height: 100vh;
         }
 
@@ -40,7 +41,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a1a, #333);
             position: fixed;
             width: 100%;
         }
@@ -53,7 +54,7 @@
             border-radius: 12px;
             width: 90%;
             max-width: 400px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         .login-header {
@@ -92,8 +93,9 @@
         .login-button {
             width: 100%;
             padding: 0.75rem;
-            background: #1a1a1a;
             color: white;
+            background: linear-gradient(135deg, #1a1a1a, #333);
+
             border: none;
             border-radius: 6px;
             font-size: 16px;
@@ -105,13 +107,13 @@
             background: #333;
         }
 
-        /* Admin Dashboard Screen */
         .admin-dashboard {
             background: #f5f5f5;
         }
 
         .dashboard-header {
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a1a, #333);
+
             color: white;
             padding: 1rem 2rem;
             display: flex;
@@ -145,10 +147,11 @@
         }
 
         .stat-card {
-            background: white;
+
             padding: 1.5rem;
-            border-radius: 8px;
+            background: #fff;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
         }
 
         .stat-title {
@@ -164,10 +167,10 @@
         }
 
         .users-table-container {
-            background: white;
-            border-radius: 8px;
+            background: #fff;
+            border-radius: 12px;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
+            overflow: scroll;
         }
 
         .table-header {
@@ -859,7 +862,6 @@
                     elements.adminEmail.value = '';
                     elements.adminPassword.value = '';
                 } catch (error) {
-                    console.error('Error signing out:', error);
                     alert('Error signing out');
                 }
             });
