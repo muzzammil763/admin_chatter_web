@@ -25,10 +25,14 @@
         .screen {
             display: none;
             min-height: 100vh;
+            width: 100%;
+            position: fixed;
+            top: 0;
+            left: 0;
         }
 
         .screen.active {
-            display: block;
+            display: block !important;
         }
 
         /* Admin Login Screen */
@@ -450,7 +454,8 @@
             projectId: "web-chatter-763",
             storageBucket: "web-chatter-763.firebasestorage.app",
             messagingSenderId: "262486527894",
-            appId: "1:262486527894:web:64688ff7e1b6a6eb7357b7"
+            appId: "1:262486527894:web:64688ff7e1b6a6eb7357b7",
+            databaseURL: "https://web-chatter-763-default-rtdb.firebaseio.com/"
         };
 
         // Initialize Firebase
@@ -487,26 +492,93 @@
 
         // Show Screen
         function showScreen(screenId) {
-            document.querySelectorAll('.screen').forEach(screen => {
+            console.log('Switching to screen:', screenId);
+            const screens = document.querySelectorAll('.screen');
+            screens.forEach(screen => {
+                screen.style.display = 'none';
                 screen.classList.remove('active');
             });
-            document.getElementById(screenId).classList.add('active');
-        }
-
-        async function validateMainAdmin(uid) {
-            const adminRef = database.ref(`admins/${uid}`);
-            const snapshot = await adminRef.once('value');
-            if (!snapshot.exists() || !snapshot.val().isMainAdmin) {
-                await auth.signOut();
-                alert('Access denied. Only the main administrator can access this panel.');
-                return false;
+            const targetScreen = document.getElementById(screenId);
+            if (targetScreen) {
+                targetScreen.style.display = 'block';
+                targetScreen.classList.add('active');
+                console.log(`Screen ${screenId} activated`);
+            } else {
+                console.error(`Screen ${screenId} not found`);
             }
-            return true;
         }
 
+        function closeModal() {
+            if (elements.userModal) {
+                elements.userModal.classList.remove('active');
+                if (elements.userForm) {
+                    elements.userForm.reset();
+                }
+            }
+        }
+
+        async function loadDashboard() {
+            console.log("Loading dashboard...");
+            showLoading(true);
+
+            try {
+                const usersRef = database.ref('users');
+                const statusRef = database.ref('status');
+
+                console.log("Fetching initial users data...");
+
+                const snapshot = await usersRef.once('value');
+                const users = snapshot.val() || {};
+                console.log("Users data received:", users);
+
+                updateUserStats(users);
+                updateUsersTable(users);
+
+                usersRef.on('value', (snapshot) => {
+                    const updatedUsers = snapshot.val() || {};
+                    console.log("Real-time users update:", updatedUsers);
+                    updateUserStats(updatedUsers);
+                    updateUsersTable(updatedUsers);
+                });
+
+                statusRef.on('value', (snapshot) => {
+                    const statuses = snapshot.val() || {};
+                    console.log("Real-time status update:", statuses);
+                    updateOnlineStatus(statuses);
+                });
+
+                console.log("Dashboard loaded successfully");
+                showLoading(false);
+            } catch (error) {
+                console.error("Dashboard loading error:", error);
+                alert('Error loading dashboard. Please try again.');
+                showLoading(false);
+            }
+        }
+
+        function updateOnlineStatus(statuses) {
+            const rows = elements.usersTableBody.getElementsByTagName('tr');
+            for (const row of rows) {
+                const userId = row.getAttribute('data-user-id');
+                const statusCell = row.cells[2]; // Status column
+                if (userId && statusCell) {
+                    const isOnline = statuses[userId]?.state === 'online';
+                    const statusSpan = statusCell.querySelector('span');
+                    const currentStatus = statusSpan?.textContent;
+                    const isDisabled = currentStatus === 'Disabled';
+
+                    if (!isDisabled) {
+                        statusCell.innerHTML = isOnline ?
+                            '<span style="color: green">Online</span>' :
+                            '<span style="color: orange">Offline</span>';
+                    }
+                }
+            }
+        }
 
         // Admin Authentication
         elements.loginButton.addEventListener('click', async () => {
+            console.log("Login attempt starting...");
             const email = elements.adminEmail.value;
             const password = elements.adminPassword.value;
 
@@ -519,122 +591,33 @@
 
             try {
                 const userCredential = await auth.signInWithEmailAndPassword(email, password);
+                console.log("User UID:", userCredential.user.uid);
 
-                // Check admin status
                 const adminRef = database.ref(`admins/${userCredential.user.uid}`);
                 const snapshot = await adminRef.once('value');
+                const adminData = snapshot.val();
 
-                if (!snapshot.exists() || !snapshot.val().isMainAdmin) {
+                if (!snapshot.exists() || !adminData.isMainAdmin) {
                     await auth.signOut();
                     alert('Access denied. Only administrators can access this panel.');
-                    showLoading(false);
-                    return;
+                    showScreen('loginScreen');
+                } else {
+                    currentUser = userCredential.user;
+                    adminRole = adminData.role;
+                    showScreen('dashboardScreen');
+                    await loadDashboard();
                 }
-
-                currentUser = userCredential.user;
-                adminRole = snapshot.val().role;
-                showScreen('dashboardScreen');
-                loadDashboard();
             } catch (error) {
                 console.error('Login error:', error);
                 alert(error.message);
+            } finally {
                 showLoading(false);
             }
         });
 
-        // Load Dashboard Data
-        async function loadDashboard() {
-    showLoading();
-    try {
-        // Load users and update stats
-        const usersRef = database.ref('users');
-        const statusRef = database.ref('status');
-
-        // Use once() first to get initial data quickly
-        const initialUsers = await usersRef.once('value');
-        updateUserStats(initialUsers.val() || {});
-        updateUsersTable(initialUsers.val() || {});
-
-        // Then set up real-time listeners
-        usersRef.on('value', (snapshot) => {
-            const users = snapshot.val() || {};
-            updateUserStats(users);
-            updateUsersTable(users);
-        }, (error) => {
-            console.error('Error loading users:', error);
-            alert('Error loading users data. Please refresh the page.');
-        });
-
-        statusRef.on('value', (snapshot) => {
-            updateOnlineStatus(snapshot.val() || {});
-        }, (error) => {
-            console.error('Error loading status:', error);
-        });
-
-    } catch (error) {
-        console.error('Dashboard loading error:', error);
-        alert('Error loading dashboard. Please try again.');
-    } finally {
-        showLoading(false);
-    }
-}
-
-        // Function to update online status indicators
-        function updateOnlineStatus(statuses) {
-            const rows = elements.usersTableBody.getElementsByTagName('tr');
-            for (const row of rows) {
-                const userId = row.getAttribute('data-user-id');
-                const statusCell = row.cells[2]; // The status column
-                if (userId && statusCell) {
-                    const isOnline = statuses[userId]?.state === 'online';
-                    const currentStatus = statusCell.querySelector('span').textContent;
-                    const isDisabled = currentStatus === 'Disabled';
-
-                    if (!isDisabled) {
-                        statusCell.innerHTML = isOnline ?
-                            '<span style="color: green">Online</span>' :
-                            '<span style="color: orange">Offline</span>';
-                    }
-                }
-            }
-        }
-
-        function updateUsersTable(users) {
-    elements.usersTableBody.innerHTML = '';
-    Object.entries(users).forEach(([uid, user]) => {
-        const row = document.createElement('tr');
-        row.setAttribute('data-user-id', uid);
-        row.innerHTML = `
-            <td>${user.email}</td>
-            <td>${user.name}</td>
-            <td>${user.disabled ? 
-                '<span style="color: red">Disabled</span>' : 
-                '<span style="color: orange">Offline</span>'}</td>
-            <td>${formatLastActive(user.lastActive)}</td>
-            <td class="user-actions">
-                <button class="action-button edit-button" onclick="editUser('${uid}')">
-                    <i class="fas fa-edit"></i>
-                </button>
-                <button class="action-button ${user.disabled ? 'edit-button' : 'disable-button'}" 
-                        onclick="toggleUserStatus('${uid}', ${!user.disabled})">
-                    <i class="fas fa-${user.disabled ? 'unlock' : 'ban'}"></i>
-                </button>
-                <button class="action-button delete-button" onclick="deleteUser('${uid}')">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        `;
-        elements.usersTableBody.appendChild(row);
-    });
-}
-
-
-        const row = document.createElement('tr');
-    
-
         // Update User Statistics
         function updateUserStats(users) {
-            const stats = Object.values(users).reduce((acc, user) => {
+            const stats = Object.values(users || {}).reduce((acc, user) => {
                 acc.total++;
                 if (user.disabled) {
                     acc.disabled++;
@@ -651,34 +634,25 @@
 
         // Update Users Table
         function updateUsersTable(users) {
-    if (!elements.usersTableBody) {
-        console.error('Users table body element not found');
-        return;
-    }
+            if (!elements.usersTableBody) return;
+            elements.usersTableBody.innerHTML = '';
+            if (!users) return;
 
-    elements.usersTableBody.innerHTML = '';
-    
-    if (!users) {
-        console.warn('No users data provided');
-        return;
-    }
+            Object.entries(users).forEach(([uid, user]) => {
+                if (!user) return;
 
-    Object.entries(users).forEach(([uid, user]) => {
-        if (!user) return; // Skip if user data is invalid
+                const row = document.createElement('tr');
+                row.setAttribute('data-user-id', uid);
 
-        const row = document.createElement('tr');
-        row.setAttribute('data-user-id', uid);
-        
-        // Sanitize user data to prevent XSS
-        const sanitizedEmail = user.email ? user.email.replace(/[<>]/g, '') : 'No email';
-        const sanitizedName = user.name ? user.name.replace(/[<>]/g, '') : 'No name';
-        
-        row.innerHTML = `
+                const sanitizedEmail = user.email ? user.email.replace(/[<>]/g, '') : 'No email';
+                const sanitizedName = user.name ? user.name.replace(/[<>]/g, '') : 'No name';
+
+                row.innerHTML = `
             <td>${sanitizedEmail}</td>
             <td>${sanitizedName}</td>
-            <td>${user.disabled ? 
-                '<span style="color: red">Disabled</span>' : 
-                '<span style="color: orange">Offline</span>'}</td>
+            <td>${user.disabled ?
+                        '<span style="color: red">Disabled</span>' :
+                        '<span style="color: orange">Offline</span>'}</td>
             <td>${formatLastActive(user.lastActive)}</td>
             <td class="user-actions">
                 <button class="action-button edit-button" onclick="editUser('${uid}')">
@@ -693,24 +667,121 @@
                 </button>
             </td>
         `;
-        elements.usersTableBody.appendChild(row);
-    });
-}
+                elements.usersTableBody.appendChild(row);
+            });
+        }
 
-        // Format Last Active Time
+        async function deleteUser(uid) {
+            if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                return;
+            }
+
+            showLoading(true);
+            try {
+                await database.ref(`users/${uid}`).remove();
+                await database.ref(`status/${uid}`).remove();
+                alert('User deleted successfully');
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                alert('Error deleting user');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+
+        async function toggleUserStatus(uid, disable) {
+            if (!confirm(`Are you sure you want to ${disable ? 'disable' : 'enable'} this user?`)) {
+                return;
+            }
+
+            showLoading(true);
+            try {
+                await database.ref(`users/${uid}`).update({
+                    disabled: disable,
+                    lastModified: firebase.database.ServerValue.TIMESTAMP
+                });
+                alert(`User ${disable ? 'disabled' : 'enabled'} successfully`);
+            } catch (error) {
+                console.error('Error toggling user status:', error);
+                alert('Error updating user status');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function editUser(uid) {
+            showLoading(true);
+            try {
+                const snapshot = await database.ref(`users/${uid}`).once('value');
+                const user = snapshot.val();
+
+                if (user) {
+                    document.getElementById('userEmail').value = user.email || '';
+                    document.getElementById('userName').value = user.name || '';
+                    document.getElementById('userPassword').value = '';
+
+                    elements.modalTitle.textContent = 'Edit User';
+                    elements.userModal.classList.add('active');
+                    elements.userForm.onsubmit = (e) => updateUser(e, uid);
+                }
+            } catch (error) {
+                console.error('Error editing user:', error);
+                alert('Error loading user data');
+            } finally {
+                showLoading(false);
+            }
+        }
+
         function formatLastActive(timestamp) {
-    if (!timestamp) return 'Never';
-    try {
-        const date = new Date(timestamp);
-        if (isNaN(date.getTime())) return 'Invalid date';
-        return date.toLocaleString();
-    } catch (error) {
-        console.error('Error formatting date:', error);
-        return 'Error';
-    }
-}
+            if (!timestamp) return 'Never';
+            try {
+                const date = new Date(timestamp);
+                if (isNaN(date.getTime())) return 'Invalid date';
+                return date.toLocaleString();
+            } catch (error) {
+                console.error('Error formatting date:', error);
+                return 'Never';
+            }
+        }
 
-        // Add New User
+        // Auth State Observer
+        auth.onAuthStateChanged(async (user) => {
+            console.log("Auth state changed:", user ? user.email : "No user");
+            
+            if (user) {
+                const adminRef = database.ref(`admins/${user.uid}`);
+                try {
+                    const snapshot = await adminRef.once('value');
+                    const adminData = snapshot.val();
+                    
+                    if (snapshot.exists() && adminData && adminData.isMainAdmin === true) {
+                        currentUser = user;
+                        adminRole = adminData.role;
+                        console.log("Showing dashboard screen");
+                        showScreen('dashboardScreen');
+                        await loadDashboard();
+                    } else {
+                        console.log("Admin validation failed, showing login screen");
+                        await auth.signOut();
+                        alert('Access denied. Only administrators can access this panel.');
+                        showScreen('loginScreen');
+                    }
+                } catch (error) {
+                    console.error("Error checking admin status:", error);
+                    await auth.signOut();
+                    alert('Error verifying admin privileges. Please try again.');
+                    showScreen('loginScreen');
+                }
+            } else {
+                console.log("No user, showing login screen");
+                currentUser = null;
+                adminRole = null;
+                showScreen('loginScreen');
+            }
+        });
+
+        // Add User Button Event Listener
         elements.addUserButton.addEventListener('click', () => {
             elements.userForm.reset();
             elements.modalTitle.textContent = 'Add New User';
@@ -718,142 +789,7 @@
             elements.userForm.onsubmit = addNewUser;
         });
 
-        async function addNewUser(e) {
-            e.preventDefault();
-            showLoading();
-
-            const email = document.getElementById('userEmail').value;
-            const password = document.getElementById('userPassword').value;
-            const name = document.getElementById('userName').value;
-
-            try {
-                // Create user in Firebase Auth
-                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-
-                // Add user data to database
-                await database.ref(`users/${userCredential.user.uid}`).set({
-                    email,
-                    name,
-                    createdAt: firebase.database.ServerValue.TIMESTAMP,
-                    disabled: false
-                });
-
-                closeModal();
-                alert('User created successfully!');
-            } catch (error) {
-                alert(error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Edit User
-        async function editUser(uid) {
-            showLoading();
-            try {
-                const snapshot = await database.ref(`users/${uid}`).once('value');
-                const user = snapshot.val();
-
-                document.getElementById('userEmail').value = user.email;
-                document.getElementById('userName').value = user.name;
-                document.getElementById('userPassword').value = '';
-
-                elements.modalTitle.textContent = 'Edit User';
-                elements.userModal.classList.add('active');
-
-                elements.userForm.onsubmit = (e) => updateUser(e, uid);
-            } catch (error) {
-                alert(error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Update User
-        async function updateUser(e, uid) {
-            e.preventDefault();
-            showLoading();
-
-            const updates = {
-                name: document.getElementById('userName').value
-            };
-
-            const password = document.getElementById('userPassword').value;
-
-            try {
-                if (password) {
-                    // Update password if provided
-                    await auth.currentUser.updatePassword(password);
-                }
-
-                await database.ref(`users/${uid}`).update(updates);
-                closeModal();
-                alert('User updated successfully!');
-            } catch (error) {
-                alert(error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Toggle User Status (Enable/Disable)
-        async function toggleUserStatus(uid, disable) {
-            if (!confirm(`Are you sure you want to ${disable ? 'disable' : 'enable'} this user?`)) {
-                return;
-            }
-
-            showLoading();
-            try {
-                await database.ref(`users/${uid}`).update({
-                    disabled: disable,
-                    lastModified: firebase.database.ServerValue.TIMESTAMP
-                });
-                alert(`User ${disable ? 'disabled' : 'enabled'} successfully!`);
-            } catch (error) {
-                alert(error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Delete User
-        async function deleteUser(uid) {
-            if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-                return;
-            }
-
-            showLoading();
-            try {
-                // Delete user data from database
-                await database.ref(`users/${uid}`).remove();
-                await database.ref(`status/${uid}`).remove();
-
-                // Remove user's chats
-                const chatsRef = database.ref('chats');
-                const snapshot = await chatsRef.once('value');
-                const chats = snapshot.val() || {};
-
-                const chatPromises = Object.keys(chats)
-                    .filter(chatId => chatId.includes(uid))
-                    .map(chatId => chatsRef.child(chatId).remove());
-
-                await Promise.all(chatPromises);
-
-                alert('User deleted successfully!');
-            } catch (error) {
-                alert(error.message);
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Modal Functions
-        function closeModal() {
-            elements.userModal.classList.remove('active');
-            elements.userForm.reset();
-        }
-
-        // Logout
+        // Logout Button Event Listener
         elements.logoutButton.addEventListener('click', async () => {
             try {
                 await auth.signOut();
@@ -861,29 +797,8 @@
                 elements.adminEmail.value = '';
                 elements.adminPassword.value = '';
             } catch (error) {
-                alert(error.message);
-            }
-        });
-
-        // Auth State Observer
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                const adminRef = database.ref(`admins/${user.uid}`);
-                const snapshot = await adminRef.once('value');
-
-                if (snapshot.exists()) {
-                    currentUser = user;
-                    adminRole = snapshot.val().role;
-                    showScreen('dashboardScreen');
-                    loadDashboard();
-                } else {
-                    await auth.signOut();
-                    showScreen('loginScreen');
-                }
-            } else {
-                currentUser = null;
-                adminRole = null;
-                showScreen('loginScreen');
+                console.error('Error signing out:', error);
+                alert('Error signing out');
             }
         });
 
