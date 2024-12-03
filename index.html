@@ -35,7 +35,6 @@
             display: block !important;
         }
 
-        /* Admin Login Screen */
         .admin-login {
             display: flex;
             justify-content: center;
@@ -237,7 +236,6 @@
             color: white;
         }
 
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -354,7 +352,6 @@
 </head>
 
 <body>
-    <!-- Admin Login Screen -->
     <div id="loginScreen" class="screen admin-login">
         <div class="login-container">
             <div class="login-header">
@@ -373,7 +370,6 @@
         </div>
     </div>
 
-    <!-- Admin Dashboard Screen -->
     <div id="dashboardScreen" class="screen admin-dashboard">
         <div class="dashboard-header">
             <h1 class="dashboard-title">Web Chatter Admin</h1>
@@ -420,7 +416,6 @@
         </div>
     </div>
 
-    <!-- Add/Edit User Modal -->
     <div id="userModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -445,7 +440,6 @@
         </div>
     </div>
 
-    <!-- Loading Overlay -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
     </div>
@@ -456,7 +450,6 @@
             let initialLoadComplete = false;
 
 
-            // Firebase Configuration
             const firebaseConfig = {
                 apiKey: "AIzaSyAMfI4Qj93P2hI-z47ZAJ_0kg98GMwF4vw",
                 authDomain: "web-chatter-763.firebaseapp.com",
@@ -467,12 +460,10 @@
                 databaseURL: "https://web-chatter-763-default-rtdb.firebaseio.com/"
             };
 
-            // Initialize Firebase
             firebase.initializeApp(firebaseConfig);
             const auth = firebase.auth();
             const database = firebase.database();
 
-            // DOM Elements
             const elements = {
                 loginScreen: document.getElementById('loginScreen'),
                 dashboardScreen: document.getElementById('dashboardScreen'),
@@ -494,16 +485,13 @@
                 userPassword: document.getElementById('userPassword')
             };
 
-            // Global Variables
             let currentUser = null;
             let adminRole = null;
 
-            // Show/Hide Loading
             function showLoading(show = true) {
                 elements.loadingOverlay.classList[show ? 'add' : 'remove']('active');
             }
 
-            // Show Screen
             function showScreen(screenId) {
                 console.log('Switching to screen:', screenId);
                 const screens = document.querySelectorAll('.screen');
@@ -585,7 +573,6 @@
                 }
             }
 
-            // Admin Authentication
             elements.loginButton.addEventListener('click', async () => {
                 console.log("Login attempt starting...");
                 const email = elements.adminEmail.value;
@@ -639,18 +626,12 @@
                         lastModified: firebase.database.ServerValue.TIMESTAMP
                     };
 
-                    // Update user in Database
                     await database.ref(`users/${uid}`).update(updates);
 
-                    // If password is provided, update it
                     if (password.trim()) {
-                        // Note: In a production environment, you'd typically use Admin SDK
-                        // For this demo, we'll create a new user with the same email/password
                         await auth.signInWithEmailAndPassword(email, password);
                         const user = auth.currentUser;
                         await user.updatePassword(password);
-
-                        // Sign back in as admin
                         await auth.signInWithEmailAndPassword(
                             elements.adminEmail.value,
                             elements.adminPassword.value
@@ -669,7 +650,6 @@
 
 
 
-            // Update User Statistics
             function updateUserStats(users) {
                 const stats = Object.values(users || {}).reduce((acc, user) => {
                     acc.total++;
@@ -686,7 +666,6 @@
                 elements.disabledUsers.textContent = stats.disabled;
             }
 
-            // Update Users Table
             function updateUsersTable(users) {
                 if (!elements.usersTableBody) return;
                 elements.usersTableBody.innerHTML = '';
@@ -805,7 +784,6 @@
                         disabled: false
                     });
 
-                    // Sign back in as admin
                     await auth.signInWithEmailAndPassword(
                         elements.adminEmail.value,
                         elements.adminPassword.value
@@ -834,7 +812,6 @@
                 }
             }
 
-            // Auth State Observer
             auth.onAuthStateChanged(async (user) => {
                 if (!initialLoadComplete) {
                     document.body.style.visibility = 'visible';
@@ -868,7 +845,6 @@
                 }
             });
 
-            // Add User Button Event Listener
             elements.addUserButton.addEventListener('click', () => {
                 elements.userForm.reset();
                 elements.modalTitle.textContent = 'Add New User';
@@ -876,7 +852,6 @@
                 elements.userForm.onsubmit = addNewUser;
             });
 
-            // Logout Button Event Listener
             elements.logoutButton.addEventListener('click', async () => {
                 try {
                     await auth.signOut();
@@ -889,7 +864,6 @@
                 }
             });
 
-            // Initial Setup
             showScreen('loginScreen');
         </script>
     </body>
