@@ -615,6 +615,51 @@
             }
         });
 
+        async function updateUser(e, uid) {
+            e.preventDefault();
+            showLoading(true);
+
+            const email = document.getElementById('userEmail').value;
+            const password = document.getElementById('userPassword').value;
+            const name = document.getElementById('userName').value;
+
+            try {
+                const updates = {
+                    email: email,
+                    name: name,
+                    lastModified: firebase.database.ServerValue.TIMESTAMP
+                };
+
+                // Update user in Database
+                await database.ref(`users/${uid}`).update(updates);
+
+                // If password is provided, update it
+                if (password.trim()) {
+                    // Note: In a production environment, you'd typically use Admin SDK
+                    // For this demo, we'll create a new user with the same email/password
+                    await auth.signInWithEmailAndPassword(email, password);
+                    const user = auth.currentUser;
+                    await user.updatePassword(password);
+
+                    // Sign back in as admin
+                    await auth.signInWithEmailAndPassword(
+                        elements.adminEmail.value,
+                        elements.adminPassword.value
+                    );
+                }
+
+                closeModal();
+                alert('User updated successfully');
+            } catch (error) {
+                console.error('Error updating user:', error);
+                alert(error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+
+
         // Update User Statistics
         function updateUserStats(users) {
             const stats = Object.values(users || {}).reduce((acc, user) => {
@@ -733,6 +778,38 @@
             }
         }
 
+        async function addNewUser(e) {
+            e.preventDefault();
+            showLoading(true);
+
+            const email = document.getElementById('userEmail').value;
+            const password = document.getElementById('userPassword').value;
+            const name = document.getElementById('userName').value;
+
+            try {
+                // Create user in Firebase Auth
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const uid = userCredential.user.uid;
+
+                // Add user data to Realtime Database
+                await database.ref(`users/${uid}`).set({
+                    email: email,
+                    name: name,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP,
+                    disabled: false
+                });
+
+                closeModal();
+                alert('User added successfully');
+            } catch (error) {
+                console.error('Error adding user:', error);
+                alert(error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+
         function formatLastActive(timestamp) {
             if (!timestamp) return 'Never';
             try {
@@ -748,13 +825,13 @@
         // Auth State Observer
         auth.onAuthStateChanged(async (user) => {
             console.log("Auth state changed:", user ? user.email : "No user");
-            
+
             if (user) {
                 const adminRef = database.ref(`admins/${user.uid}`);
                 try {
                     const snapshot = await adminRef.once('value');
                     const adminData = snapshot.val();
-                    
+
                     if (snapshot.exists() && adminData && adminData.isMainAdmin === true) {
                         currentUser = user;
                         adminRole = adminData.role;
